@@ -267,6 +267,3 @@ This project is for educational purposes. Contributions, suggestions, and bug re
 
 When contributing, please ensure your code follows the existing style and includes comments where necessary, especially for educational clarity.
 
-## License
-
-This project is licensed under the MIT License. See the `LICENSE` file (if one exists, otherwise assume MIT) for details.
