@@ -98,13 +98,44 @@ contract VendingMachine {
      * @param _price The price of the new item in Wei.
      * @param _supply The initial available supply of the new item.
      */
+    // Add these new state variables
+    uint public totalRevenue;
+    mapping(uint => uint) public itemSales;
+    
+    // Add these events
+    event ItemAdded(uint indexed itemId, string name, uint price, uint supply);
+    event ItemUpdated(uint indexed itemId, string name, uint newPrice, uint newSupply);
+    event ItemRemoved(uint indexed itemId);
+    
+    // Add admin functions
+    // Enhanced input validation
     function addItem(string memory _name, uint _price, uint _supply) public onlyOwner {
-        // The ID for the new item will be the current length of the `items` array (0-indexed).
-        uint itemId = items.length;
-        // Create a new `Item` struct in memory and add it to the `items` array.
+        require(bytes(_name).length > 0, "Name cannot be empty");
+        require(_price > 0, "Price must be greater than 0");
+        require(_supply > 0, "Supply must be greater than 0");
         items.push(Item(_name, _price, _supply));
-        // Emit an event to log that a new item has been added.
-        emit ItemAdded(itemId, _name, _price, _supply);
+        emit ItemAdded(items.length - 1, _name, _price, _supply);
+    }
+    
+    // Multi-signature requirement for critical operations
+    address[] public admins;
+    mapping(address => bool) public isAdmin;
+    
+    function addAdmin(address _admin) public onlyOwner {
+        require(!isAdmin[_admin], "Address is already an admin");
+        admins.push(_admin);
+        isAdmin[_admin] = true;
+    }
+    function updateItem(uint _itemId, string memory _name, uint _price, uint _supply) public onlyOwner {
+        require(_itemId < items.length, "Invalid item ID");
+        items[_itemId] = Item(_name, _price, _supply);
+        emit ItemUpdated(_itemId, _name, _price, _supply);
+    }
+    
+    function removeItem(uint _itemId) public onlyOwner {
+        require(_itemId < items.length, "Invalid item ID");
+        delete items[_itemId];
+        emit ItemRemoved(_itemId);
     }
 
     /**
