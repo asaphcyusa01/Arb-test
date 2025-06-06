@@ -13,12 +13,12 @@ import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
  * @author Smart Contract Developer
  * @notice This contract implements a decentralized vending machine with comprehensive features
  */
-contract VendingMachineV2 is 
-    ReentrancyGuard, 
-    Pausable, 
-    AccessControl, 
-    Initializable, 
-    UUPSUpgradeable 
+contract VendingMachineV2 is
+    ReentrancyGuard,
+    Pausable,
+    AccessControl,
+    Initializable,
+    UUPSUpgradeable
 {
     // --- Constants ---
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -107,31 +107,31 @@ contract VendingMachineV2 is
     
     // --- Events ---
     event ItemPurchased(
-        address indexed buyer, 
-        uint256 indexed itemId, 
-        string itemName, 
-        uint256 quantity, 
+        address indexed buyer,
+        uint256 indexed itemId,
+        string itemName,
+        uint256 quantity,
         uint256 totalPaid,
         uint256 loyaltyPointsEarned
     );
     
     event ItemAdded(
-        uint256 indexed itemId, 
-        string name, 
-        uint256 price, 
+        uint256 indexed itemId,
+        string name,
+        uint256 price,
         uint256 supply,
         string category
     );
     
     event ItemRestocked(
-        uint256 indexed itemId, 
-        uint256 addedQuantity, 
+        uint256 indexed itemId,
+        uint256 addedQuantity,
         uint256 newSupply
     );
     
     event LoyaltyPointsEarned(
-        address indexed user, 
-        uint256 points, 
+        address indexed user,
+        uint256 points,
         uint256 totalPoints
     );
     
@@ -399,6 +399,10 @@ contract VendingMachineV2 is
         _addItem(_name, _price, _supply, _maxSupply, _category, _imageURI);
     }
     
+    // Add category tracking mapping
+    mapping(bytes32 => uint256[]) private _categoryItems;
+    
+    // Modified _addItem function
     function _addItem(
         string memory _name,
         uint256 _price,
@@ -407,6 +411,9 @@ contract VendingMachineV2 is
         string memory _category,
         string memory _imageURI
     ) internal {
+        uint256 itemId = items.length;
+        bytes32 categoryHash = keccak256(bytes(_category));
+        
         items.push(Item({
             name: _name,
             price: _price,
@@ -572,28 +579,14 @@ function restockItem(uint256 _itemId, uint256 _quantity) external {
         return result;
     }
     
+    // Optimized getItemsByCategory
     function getItemsByCategory(string calldata _category) 
         external 
         view 
         returns (uint256[] memory) 
     {
-        uint256[] memory categoryItems = new uint256[](items.length);
-        uint256 count = 0;
-        
-        for (uint256 i = 0; i < items.length; i++) {
-            if (keccak256(bytes(items[i].category)) == keccak256(bytes(_category))) {
-                categoryItems[count] = i;
-                count++;
-            }
-        }
-        
-        // Resize array
-        uint256[] memory result = new uint256[](count);
-        for (uint256 i = 0; i < count; i++) {
-            result[i] = categoryItems[i];
-        }
-        
-        return result;
+        bytes32 categoryHash = keccak256(bytes(_category));
+        return _categoryItems[categoryHash];
     }
     
     function getAnalytics() 
