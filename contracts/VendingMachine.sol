@@ -188,11 +188,25 @@ contract VendingMachineV2 is
     
     // --- Core Functions ---
     
+    // Add emergency state tracking
+    enum EmergencyState { Operational, PartialPause, FullPause }
+    EmergencyState public emergencyState = EmergencyState.Operational;
+    
+    event EmergencyStopActivated(address indexed admin, EmergencyState newState);
+    
+    // Add circuit breaker modifier
+    modifier emergencyStopEnabled() {
+        require(emergencyState == EmergencyState.Operational, "VM: Emergency stop active");
+        _;
+    }
+    
+    // Update function signatures to include modifier
     function purchaseItem(uint256 _itemId, uint256 _quantity)
         external
         payable
         nonReentrant
         whenNotPaused
+        emergencyStopEnabled  // Added modifier
         validItem(_itemId)
         notBlacklisted
         rateLimited
@@ -592,4 +606,22 @@ contract VendingMachineV2 is
     receive() external payable {
         // Accept direct ETH deposits
     }
+}
+
+// Add emergency control functions
+function activateFullEmergencyStop() external onlyRole(ADMIN_ROLE) {
+    emergencyState = EmergencyState.FullPause;
+    _pause(); // Automatically pause contract
+    emit EmergencyStopActivated(msg.sender, EmergencyState.FullPause);
+}
+
+function activatePartialEmergency() external onlyRole(ADMIN_ROLE) {
+    emergencyState = EmergencyState.PartialPause;
+    emit EmergencyStopActivated(msg.sender, EmergencyState.PartialPause);
+}
+
+function resumeNormalOperations() external onlyRole(ADMIN_ROLE) {
+    emergencyState = EmergencyState.Operational;
+    _unpause();
+    emit EmergencyStopActivated(msg.sender, EmergencyState.Operational);
 }
