@@ -625,3 +625,75 @@ function resumeNormalOperations() external onlyRole(ADMIN_ROLE) {
     _unpause();
     emit EmergencyStopActivated(msg.sender, EmergencyState.Operational);
 }
+
+// Add nonce tracking
+mapping(address => uint256) public nonces;
+
+event NonceUsed(address indexed user, uint256 nonce);
+
+// Create modifier for signature verification
+modifier withSignature(
+    bytes32 hash,
+    uint8 v,
+    bytes32 r,
+    bytes32 s,
+    uint256 nonce
+) {
+    bytes32 ethSignedHash = keccak256(
+        abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)
+    );
+    
+    require(ecrecover(ethSignedHash, v, r, s) == msg.sender, "VM: Invalid signature");
+    require(nonces[msg.sender] < nonce, "VM: Replayed transaction");
+    nonces[msg.sender] = nonce;
+    emit NonceUsed(msg.sender, nonce);
+    _;
+}
+
+// Update purchase functions with signature verification
+function purchaseItem(
+    uint256 _itemId,
+    uint256 _quantity,
+    uint256 nonce,
+    bytes32 hash,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+) 
+    external 
+    payable
+    withSignature(hash, v, r, s, nonce)
+    validItem(_itemId)
+    notBlacklisted
+    rateLimited
+    validQuantity(_quantity)
+{
+    require(
+        hash == keccak256(abi.encode(_itemId, _quantity, nonce)),
+        "VM: Hash mismatch"
+    );
+    // Existing purchase logic
+}
+
+function bulkPurchase(
+    uint256[] calldata _itemIds,
+    uint256[] calldata _quantities,
+    uint256 nonce,
+    bytes32 hash,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+) 
+    external
+    payable
+    withSignature(hash, v, r, s, nonce)
+    validItem(_itemId)
+    notBlacklisted
+    rateLimited
+{
+    require(
+        hash == keccak256(abi.encode(_itemIds, _quantities, nonce)),
+        "VM: Hash mismatch"
+    );
+    // Existing bulk purchase logic
+}
