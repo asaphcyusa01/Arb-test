@@ -580,13 +580,17 @@ function restockItem(uint256 _itemId, uint256 _quantity) external {
     }
     
     // Optimized getItemsByCategory
-    function getItemsByCategory(string calldata _category) 
-        external 
-        view 
-        returns (uint256[] memory) 
+    function getBulkCategoryItems(string[] calldata _categories)
+        external
+        view
+        returns (uint256[][] memory)
     {
-        bytes32 categoryHash = keccak256(bytes(_category));
-        return _categoryItems[categoryHash];
+        uint256[][] memory result = new uint256[][](_categories.length);
+        for (uint256 i = 0; i < _categories.length; i++) {
+            bytes32 categoryHash = keccak256(bytes(_categories[i]));
+            result[i] = _categoryItems[categoryHash];
+        }
+        return result;
     }
     
     function getAnalytics() 
