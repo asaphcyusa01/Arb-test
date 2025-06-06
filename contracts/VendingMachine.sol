@@ -429,22 +429,48 @@ function restockItem(uint256 _itemId, uint256 _quantity) external {
     item.lastRestocked = uint64(block.timestamp);
 }
     
-    function updateItemPrice(uint256 _itemId, uint256 _newPrice) 
+    // Batch price update
+    function batchUpdatePrices(uint256[] calldata _itemIds, uint256[] calldata _newPrices) 
         external 
-        onlyRole(ADMIN_ROLE) 
+        onlyRole(ADMIN_ROLE)
     {
-        require(_itemId < items.length, "VM: Invalid item ID");
-        require(_newPrice >= MIN_PRICE && _newPrice <= MAX_PRICE, "VM: Price out of range");
+        require(_itemIds.length == _newPrices.length, "VM: Array length mismatch");
+        require(_itemIds.length <= 50, "VM: Batch too large");
         
-        items[_itemId].price = _newPrice;
+        for (uint256 i = 0; i < _itemIds.length; i++) {
+            require(_itemIds[i] < items.length, "VM: Invalid item ID");
+            require(_newPrices[i] >= MIN_PRICE && _newPrices[i] <= MAX_PRICE, "VM: Price out of range");
+            items[_itemIds[i]].price = _newPrices[i];
+        }
     }
     
-    function toggleItemActive(uint256 _itemId) 
-        external 
-        onlyRole(OPERATOR_ROLE) 
+    // Batch restock
+    function batchRestockItems(
+        uint256[] calldata _itemIds,
+        uint256[] calldata _quantities
+    ) external onlyRole(OPERATOR_ROLE) {
+        require(_itemIds.length == _quantities.length, "VM: Array length mismatch");
+        require(_itemIds.length <= 100, "VM: Batch too large");
+    
+        for (uint256 i = 0; i < _itemIds.length; i++) {
+            Item storage item = items[_itemIds[i]];
+            require(item.supply + _quantities[i] <= item.maxSupply, "VM: Exceeds max supply");
+            item.supply += uint128(_quantities[i]);
+            item.lastRestocked = uint64(block.timestamp);
+        }
+    }
+    
+    // Batch toggle activation
+    function batchToggleActive(uint256[] calldata _itemIds, bool[] calldata _statuses)
+        external
+        onlyRole(OPERATOR_ROLE)
     {
-        require(_itemId < items.length, "VM: Invalid item ID");
-        items[_itemId].isActive = !items[_itemId].isActive;
+        require(_itemIds.length == _statuses.length, "VM: Array length mismatch");
+        
+        for (uint256 i = 0; i < _itemIds.length; i++) {
+            require(_itemIds[i] < items.length, "VM: Invalid item ID");
+            items[_itemIds[i]].isActive = _statuses[i];
+        }
     }
     
     function blacklistUser(address _user, bool _status) 
