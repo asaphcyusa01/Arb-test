@@ -700,16 +700,8 @@ modifier withSignature(
 }
 
 // Update purchase functions with signature verification
-function purchaseItem(
-    uint256 _itemId,
-    uint256 _quantity,
-    uint256 nonce,
-    bytes32 hash,
-    uint8 v,
-    bytes32 r,
-    bytes32 s
-) 
-    external 
+function purchaseItem(uint256 _itemId, uint256 _quantity, uint256 nonce, bytes32 hash, uint8 v, bytes32 r, bytes32 s)
+    external
     payable
     withSignature(hash, v, r, s, nonce)
     validItem(_itemId)
@@ -721,18 +713,12 @@ function purchaseItem(
         hash == keccak256(abi.encode(_itemId, _quantity, nonce)),
         "VM: Hash mismatch"
     );
-    // Existing purchase logic
+    
+    // Actual purchase execution happens here
+    _processPurchase(_itemId, _quantity); // Internal function call
 }
 
-function bulkPurchase(
-    uint256[] calldata _itemIds,
-    uint256[] calldata _quantities,
-    uint256 nonce,
-    bytes32 hash,
-    uint8 v,
-    bytes32 r,
-    bytes32 s
-) 
+function bulkPurchase(uint256[] calldata _itemIds, uint256[] calldata _quantities, uint256 nonce, bytes32 hash, uint8 v, bytes32 r, bytes32 s)
     external
     payable
     withSignature(hash, v, r, s, nonce)
