@@ -730,5 +730,28 @@ function bulkPurchase(uint256[] calldata _itemIds, uint256[] calldata _quantitie
         hash == keccak256(abi.encode(_itemIds, _quantities, nonce)),
         "VM: Hash mismatch"
     );
-    // Existing bulk purchase logic
+    require(_itemIds.length == _quantities.length, "VM: Array length mismatch");
+        
+        uint256 totalPrice;
+        for (uint256 i = 0; i < _itemIds.length; i++) {
+            Item storage item = items[_itemIds[i]];
+            require(item.supply >= _quantities[i], "VM: Insufficient supply");
+            totalPrice += _calculatePrice(_itemIds[i], _quantities[i], msg.sender);
+        }
+
+        if (paymentToken[msg.sender] == address(0)) {
+            require(msg.value >= totalPrice, "VM: Insufficient ETH");
+        } else {
+            IERC20 token = IERC20(paymentToken[msg.sender]);
+            require(token.balanceOf(msg.sender) >= totalPrice, "VM: Insufficient balance");
+            token.transferFrom(msg.sender, address(this), totalPrice);
+        }
+
+        for (uint256 i = 0; i < _itemIds.length; i++) {
+            Item storage item = items[_itemIds[i]];
+            item.supply -= _quantities[i];
+            _updateLoyalty(msg.sender, _quantities[i], item.price);
+        }
+
+        emit BulkPurchase(msg.sender, _itemIds, _quantities, totalPrice);
 }
