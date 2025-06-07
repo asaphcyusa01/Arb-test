@@ -6,11 +6,12 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title VendingMachineV2
  * @dev Production-ready vending machine with enhanced security, gas optimization, and real-world features
- * @author Smart Contract Developer
+ * @author Q100
  * @notice This contract implements a decentralized vending machine with comprehensive features
  */
 contract VendingMachineV2 is
@@ -49,13 +50,15 @@ contract VendingMachineV2 is
     
     // Packed UserProfile
     struct UserProfile {
-        uint128 totalPurchases;
-        uint128 totalSpent;
-        uint64 lastPurchase;
-        uint32 loyaltyPoints;
-        uint16 discountRate; // Basis points (0-10000)
-        bool isBlacklisted;
-    }
+    uint128 totalPurchases;
+    uint128 totalSpent;
+    uint64 lastPurchase;
+    uint32 loyaltyPoints;
+    uint32 pointsExpiry; // New expiration timestamp
+    uint16 discountRate;
+    uint8 loyaltyTier;
+    bool isBlacklisted;
+}
     
     // Compact PurchaseRecord
     struct PurchaseRecord {
@@ -66,14 +69,7 @@ contract VendingMachineV2 is
         uint128 amountPaid;
     }
     
-    struct UserProfile {
-        uint256 totalPurchases;
-        uint256 totalSpent;
-        uint256 loyaltyPoints;   // New: point-based loyalty system
-        uint256 discountRate;
-        bool isBlacklisted;      // New: fraud prevention
-        uint256 lastPurchase;
-    }
+    
     
     // Core state
     Item[] public items;
@@ -104,6 +100,14 @@ contract VendingMachineV2 is
     // New: Rate limiting
     mapping(address => uint256) public lastPurchaseTime;
     uint256 public purchaseCooldown = 1 minutes;
+    mapping(address => address) public paymentToken;
+
+    struct LoyaltyTier {
+        uint256 threshold;
+        uint16 discount;
+        uint256 pointsMultiplier;
+    }
+    LoyaltyTier[] public loyaltyTiers;
     
     // --- Events ---
     event ItemPurchased(
@@ -180,6 +184,10 @@ contract VendingMachineV2 is
     }
     
     function initialize(address _owner) public initializer {
+        // Initialize loyalty tiers
+        loyaltyTiers.push(LoyaltyTier(100, 1000, 1)); // Bronze
+        loyaltyTiers.push(LoyaltyTier(500, 1500, 2)); // Silver
+        loyaltyTiers.push(LoyaltyTier(1000, 2000, 3)); // Gold
         __ReentrancyGuard_init();
         __Pausable_init();
         __AccessControl_init();
@@ -213,12 +221,11 @@ contract VendingMachineV2 is
     }
     
     // Update function signatures to include modifier
-    function purchaseItem(uint256 _itemId, uint256 _quantity)
+    function purchaseItem(uint256 _itemId, uint256 _quantity, address tokenAddress)
         external
-        payable
         nonReentrant
         whenNotPaused
-        emergencyStopEnabled  // Added modifier
+        emergencyStopEnabled
         validItem(_itemId)
         notBlacklisted
         rateLimited
@@ -228,7 +235,15 @@ contract VendingMachineV2 is
         require(item.supply >= _quantity, "VM: Insufficient supply");
         
         uint256 totalPrice = _calculatePrice(_itemId, _quantity, msg.sender);
-        require(msg.value >= totalPrice, "VM: Insufficient payment");
+        
+        if (tokenAddress == address(0)) {
+            require(msg.value >= totalPrice, "VM: Insufficient ETH");
+        } else {
+            IERC20 token = IERC20(tokenAddress);
+            require(token.allowance(msg.sender, address(this)) >= totalPrice, "VM: Insufficient allowance");
+            token.transferFrom(msg.sender, address(this), totalPrice);
+            paymentToken[msg.sender] = tokenAddress;
+        }
         
         // Update state
         item.supply -= _quantity;
@@ -294,6 +309,7 @@ contract VendingMachineV2 is
         payable
         nonReentrant
         whenNotPaused
+        emergencyStopEnabled
         notBlacklisted
         rateLimited
     {
@@ -430,7 +446,7 @@ contract VendingMachineV2 is
     }
     
     // Update all struct references with casting where needed
-function restockItem(uint256 _itemId, uint256 _quantity) external {
+function restockItem(uint256 _itemId, uint256 _quantity) external onlyRole(OPERATOR_ROLE) {
     Item storage item = items[_itemId];
     item.supply = uint128(uint256(item.supply) + _quantity);
     item.lastRestocked = uint64(block.timestamp);
@@ -509,10 +525,14 @@ function restockItem(uint256 _itemId, uint256 _quantity) external {
     
     // --- Emergency Functions ---
     
-    function emergencyWithdraw(uint256 _amount) 
+    function emergencyWithdraw(uint256 _amount, address tokenAddress) 
         external 
         onlyRole(ADMIN_ROLE) 
     {
+        if(tokenAddress != address(0)) {
+            IERC20 token = IERC20(tokenAddress);
+            token.transfer(msg.sender, _amount);
+        } else {
         uint256 today = block.timestamp / 1 days;
         require(
             dailyWithdrawn[today] + _amount <= maxDailyWithdrawal,
@@ -521,6 +541,7 @@ function restockItem(uint256 _itemId, uint256 _quantity) external {
         
         dailyWithdrawn[today] += _amount;
         payable(msg.sender).transfer(_amount);
+        }
         
         emit EmergencyWithdrawal(msg.sender, _amount);
     }
